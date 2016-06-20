@@ -13,13 +13,13 @@ var (
 	quiet = app.Flag("quiet", "Do not print to stdout.").Short('q').Bool()
 
 	// Commands
-	stopContainers = app.Command("stop-containers", "Stop containers (all by default).").Alias("scs")
+	stopContainers = app.Command("stop-containers", "Stop containers (all by default). Alias: scs").Alias("scs")
 	stopContainer  = stopContainers.Arg("container", "Container to stop (all by default).").String()
 
-	removeStopped = app.Command("remove-stopped", "Remove stopped containers").Alias("rms")
-	removeAll     = app.Command("remove-all", "Remove all containers").Alias("rma")
+	removeStopped = app.Command("remove-stopped", "Remove stopped containers. Alias: rms").Alias("rms")
+	removeAll     = app.Command("remove-all", "Remove all containers. Alias: rma").Alias("rma")
 
-	cleanImages = app.Command("remove-images", "Remove all untagged images.").Alias("rmi")
+	cleanImages = app.Command("remove-images", "Remove all untagged images. Alias: rmi").Alias("rmi")
 
 	name   = app.Command("name", "Generates a unique sequential name from a prefix (i.e. 'web' returns 'web-001')")
 	prefix = name.Arg("prefix", "Prefix for a new container. For example, issuing web when there are containers web-001 and web-002 would return web-003").Required().String()

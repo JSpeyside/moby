@@ -38,6 +38,7 @@ func NewMobyClient() (*MobyClient, error) {
 
 func (mc MobyClient) CleanImages() error {
 	images := mc.listImages()
+	removeCount := 0
 	for _, i := range images {
 		// fmt.Println(i.RepoTags)
 		remove := false
@@ -51,8 +52,11 @@ func (mc MobyClient) CleanImages() error {
 		}
 		if remove == true {
 			mc.removeImage(i.ID)
+			removeCount += 1
 		}
 	}
+	msg := fmt.Sprintf("Removed (%d) images.", removeCount)
+	mc.logger.Log(msg)
 	return nil
 }
 
@@ -146,6 +150,8 @@ func (mc MobyClient) removeContainers(containers []types.Container) error {
 	}
 	if len(removedContainers) != 0 {
 		mc.logger.LogLines(removedContainers)
+		msg := fmt.Sprintf("Removed (%d) containers.", len(removedContainers))
+		mc.logger.Log(msg)
 	}
 	return nil
 }
@@ -158,11 +164,15 @@ func (mc MobyClient) removeImage(imageID string) error {
 
 func (mc MobyClient) StopContainers() error {
 	containers := mc.listContainers()
+	stopCount := 0
 	for _, c := range containers {
 		if c.State == "running" {
 			mc.client.ContainerStop(context.Background(), c.ID, 30)
+			stopCount += 1
 		}
 	}
+	msg := fmt.Sprintf("Stopped (%d) containers.", stopCount)
+	mc.logger.Log(msg)
 	return nil
 }
 
