@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"github.com/docker/engine-api/client"
 	"github.com/docker/engine-api/types"
+	"github.com/docker/engine-api/types/filters"
 	"github.com/jlgrady1/moby/infrastructure"
 	"golang.org/x/net/context"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -54,6 +56,36 @@ func (mc MobyClient) CleanImages() error {
 	return nil
 }
 
+func (mc MobyClient) GetName(name string) (string, error) {
+	containers := mc.listContainersByName(name)
+	num := 1
+	var err error = nil
+
+	for _, c := range containers {
+		cName := c.Names[0]
+		if len(cName) > 0 {
+			cName = cName[1:len(cName)]
+		}
+		parts := strings.SplitN(cName, "-", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		if parts[0] != name {
+			continue
+		}
+		strNum := parts[1]
+		dnum, err := strconv.Atoi(strNum)
+		if err != nil {
+			continue
+		}
+		if dnum > num {
+			num = dnum
+		}
+	}
+	sNum, _ := padNum(num)
+	return fmt.Sprintf("%s-%s", name, sNum), err
+}
+
 func (mc MobyClient) listImages() []types.Image {
 	options := types.ImageListOptions{All: true}
 	images, err := mc.client.ImageList(context.Background(), options)
@@ -65,6 +97,17 @@ func (mc MobyClient) listImages() []types.Image {
 
 func (mc MobyClient) listContainers() []types.Container {
 	options := types.ContainerListOptions{All: true}
+	containers, err := mc.client.ContainerList(context.Background(), options)
+	if err != nil {
+		panic(err)
+	}
+	return containers
+}
+
+func (mc MobyClient) listContainersByName(name string) []types.Container {
+	filterArg := filters.NewArgs()
+	filterArg.Add("name", name)
+	options := types.ContainerListOptions{All: true, Filter: filterArg}
 	containers, err := mc.client.ContainerList(context.Background(), options)
 	if err != nil {
 		panic(err)
@@ -121,4 +164,15 @@ func (mc MobyClient) StopContainers() error {
 		}
 	}
 	return nil
+}
+
+func padNum(num int) (string, error) {
+	if num > 999 {
+		return "", fmt.Errorf("Number %d is too large. Only numbers up to 999 are supported", num)
+	} else if num > 100 {
+		return fmt.Sprintf("%d", num), nil
+	} else if num > 10 {
+		return fmt.Sprintf("0%d", num), nil
+	}
+	return fmt.Sprintf("00%d", num), nil
 }

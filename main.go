@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/jlgrady1/moby/infrastructure"
 	"github.com/jlgrady1/moby/interfaces"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -20,7 +21,8 @@ var (
 
 	cleanImages = app.Command("remove-images", "Remove all untagged images.").Alias("rmi")
 
-	name = app.Command("name", "Generates a unique sequential name from a prefix (i.e. 'web' returns 'web-001')")
+	name   = app.Command("name", "Generates a unique sequential name from a prefix (i.e. 'web' returns 'web-001')")
+	prefix = name.Arg("prefix", "Prefix for a new container. For example, issuing web when there are containers web-001 and web-002 would return web-003").Required().String()
 
 	start = app.Command("start", "Starts the default docker machine and configures env")
 
@@ -44,5 +46,8 @@ func main() {
 		mobyClient.StopContainers()
 	case cleanImages.FullCommand():
 		mobyClient.CleanImages()
+	case name.FullCommand():
+		name, _ := mobyClient.GetName(*prefix)
+		fmt.Println(name)
 	}
 }
