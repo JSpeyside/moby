@@ -62,7 +62,7 @@ func (mc MobyClient) CleanImages() error {
 
 func (mc MobyClient) GetName(name string) (string, error) {
 	containers := mc.listContainersByName(name)
-	num := 1
+	num := 0
 	var err error = nil
 
 	for _, c := range containers {
@@ -86,6 +86,7 @@ func (mc MobyClient) GetName(name string) (string, error) {
 			num = dnum
 		}
 	}
+	num += 1
 	sNum, _ := padNum(num)
 	return fmt.Sprintf("%s-%s", name, sNum), err
 }
