@@ -26,7 +26,8 @@ var (
 
 	start = app.Command("start", "Starts the default docker machine and configures env")
 
-	ip = app.Command("ip", "Get the IP for a given container.")
+	ip          = app.Command("ip", "Get the IP for a given container.")
+	ipContainer = ip.Arg("name", "The name of the container to fetch the IP from.").Required().String()
 )
 
 func main() {
@@ -49,5 +50,8 @@ func main() {
 	case name.FullCommand():
 		name, _ := mobyClient.GetName(*prefix)
 		fmt.Println(name)
+	case ip.FullCommand():
+		ipAddress, _ := mobyClient.GetIP(*ipContainer)
+		fmt.Println(ipAddress)
 	}
 }

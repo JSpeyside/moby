@@ -60,6 +60,25 @@ func (mc MobyClient) CleanImages() error {
 	return nil
 }
 
+func (mc MobyClient) GetIP(name string) (string, error) {
+	containers := mc.listContainersByName(name)
+	for _, c := range containers {
+		cName := c.Names[0]
+		if len(cName) > 0 {
+			cName = cName[1:len(cName)]
+		}
+		if name != cName {
+			continue
+		}
+		bridge, ok := c.NetworkSettings.Networks["bridge"]
+		if !ok {
+			continue
+		}
+		return bridge.IPAddress, nil
+	}
+	return "", nil
+}
+
 func (mc MobyClient) GetName(name string) (string, error) {
 	containers := mc.listContainersByName(name)
 	num := 0
