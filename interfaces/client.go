@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type MobyClient struct {
@@ -37,10 +38,21 @@ func NewMobyClient() (*MobyClient, error) {
 }
 
 func (mc MobyClient) CleanImages() error {
+	previousCount := -1
+	removeCount := 0
+	for removeCount != previousCount {
+		previousCount = removeCount
+		removeCount, _ = mc.cleanTags()
+	}
+	mc.logger.Log("Cleaned images.")
+	return nil
+}
+
+func (mc MobyClient) cleanTags() (int, error) {
 	images := mc.listImages()
 	removeCount := 0
+
 	for _, i := range images {
-		// fmt.Println(i.RepoTags)
 		remove := false
 		for _, tag := range i.RepoTags {
 			tagNames := strings.Split(tag, ":")
@@ -55,9 +67,7 @@ func (mc MobyClient) CleanImages() error {
 			removeCount += 1
 		}
 	}
-	msg := fmt.Sprintf("Removed (%d) images.", removeCount)
-	mc.logger.Log(msg)
-	return nil
+	return removeCount, nil
 }
 
 func (mc MobyClient) GetIP(name string) (string, error) {
@@ -187,7 +197,8 @@ func (mc MobyClient) StopContainers() error {
 	stopCount := 0
 	for _, c := range containers {
 		if c.State == "running" {
-			mc.client.ContainerStop(context.Background(), c.ID, 30)
+			duration, _ := time.ParseDuration("30s")
+			mc.client.ContainerStop(context.Background(), c.ID, &duration)
 			stopCount += 1
 		}
 	}
