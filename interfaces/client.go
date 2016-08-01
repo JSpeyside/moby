@@ -42,7 +42,10 @@ func (mc MobyClient) CleanImages() error {
 	removeCount := 0
 	for removeCount != previousCount {
 		previousCount = removeCount
-		removeCount, _ = mc.cleanTags()
+		removeCount, err = mc.cleanTags()
+		if err != nil {
+			return err
+		}
 	}
 	mc.logger.Log("Cleaned images.")
 	return nil
