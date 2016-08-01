@@ -38,6 +38,7 @@ func NewMobyClient() (*MobyClient, error) {
 }
 
 func (mc MobyClient) CleanImages() error {
+	var err error
 	previousCount := -1
 	removeCount := 0
 	for removeCount != previousCount {
