@@ -23,14 +23,14 @@ func NewMobyClient() (*MobyClient, error) {
 	var cli *client.Client
 	var err error
 	systemOS := runtime.GOOS
-	if systemOS == "darwin" {
+	if systemOS == "darwin" || systemOS == "linux" {
 		// cli, err = client.NewEnvClient()
 		defaultHeaders := map[string]string{"User-Agent": "engine-api-cli-1.0"}
 		cli, err = client.NewClient("unix:///var/run/docker.sock", "v1.23", nil, defaultHeaders)
 	} else {
 		// defaultHeaders := map[string]string{"User-Agent": "engine-api-cli-1.0"}
 		// cli, err := client.NewClient("unix:///var/run/docker.sock", "v1.22", nil, defaultHeaders)
-		return nil, fmt.Errorf("Unsupported OS `%s`. Only Mac OS X is currently supported", systemOS)
+		panic(fmt.Sprintf("Unsupported OS `%s`. Only Mac OS X is currently supported", systemOS))
 	}
 	logger := infrastructure.NewLogger()
 	mobyClient := &MobyClient{cli, logger, false}
