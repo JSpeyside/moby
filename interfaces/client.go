@@ -21,12 +21,12 @@ type MobyClient struct {
 }
 
 //NewMobyClient returns a pointer to a new MobyClient
-func NewMobyClient(quiet bool) (mobyClient *MobyClient, err error) {
+func NewMobyClient(quiet bool, logfile string) (mobyClient *MobyClient, err error) {
 	var log logger.Log
 	if quiet == true {
 		log = logger.NewMockLogger()
 	} else {
-		log, err = logger.NewLogger("/tmp/moby.log", logger.TRACE)
+		log, err = logger.NewLogger(logfile, logger.TRACE)
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +114,9 @@ func (mc *MobyClient) GetName(name string) (str string, err error) {
 	}
 	num++
 	sNum, _ := padNum(num)
-	return fmt.Sprintf("%s-%s", name, sNum), err
+	newName := fmt.Sprintf("%s-%s", name, sNum)
+	mc.log.ConsoleInfo(newName)
+	return newName, err
 }
 
 func (mc *MobyClient) formatContainers(containers []types.Container) string {
