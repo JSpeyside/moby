@@ -2,80 +2,69 @@ package interfaces
 
 import (
 	"fmt"
-	"github.com/docker/engine-api/client"
-	"github.com/docker/engine-api/types"
-	"github.com/docker/engine-api/types/filters"
-	"github.com/jlgrady1/moby/infrastructure"
-	"golang.org/x/net/context"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/client"
+	"github.com/jlgrady1/go-log"
+	"github.com/jlgrady1/go-utils/format"
+	"golang.org/x/net/context"
 )
 
+// MobyClient is a client and wrapper around the docker api client
 type MobyClient struct {
 	client *client.Client
-	logger *infrastructure.Logger
-	Quiet  bool
+	log    logger.Log
 }
 
-func NewMobyClient() (*MobyClient, error) {
-	var cli *client.Client
-	var err error
-	systemOS := runtime.GOOS
-	if systemOS == "darwin" || systemOS == "linux" {
-		// cli, err = client.NewEnvClient()
-		defaultHeaders := map[string]string{"User-Agent": "engine-api-cli-1.0"}
-		cli, err = client.NewClient("unix:///var/run/docker.sock", "v1.23", nil, defaultHeaders)
+//NewMobyClient returns a pointer to a new MobyClient
+func NewMobyClient(quiet bool, logfile string) (mobyClient *MobyClient, err error) {
+	var log logger.Log
+	if quiet == true {
+		log = logger.NewMockLogger()
 	} else {
-		// defaultHeaders := map[string]string{"User-Agent": "engine-api-cli-1.0"}
-		// cli, err := client.NewClient("unix:///var/run/docker.sock", "v1.22", nil, defaultHeaders)
-		panic(fmt.Sprintf("Unsupported OS `%s`. Only Mac OS X is currently supported", systemOS))
-	}
-	logger := infrastructure.NewLogger()
-	mobyClient := &MobyClient{cli, logger, false}
-	return mobyClient, err
-}
-
-func (mc MobyClient) CleanImages() error {
-	var err error
-	previousCount := -1
-	removeCount := 0
-	for removeCount != previousCount {
-		previousCount = removeCount
-		removeCount, err = mc.cleanTags()
+		log, err = logger.NewLogger(logfile, logger.TRACE)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	mc.logger.Log("Cleaned images.")
+
+	cli, err := client.NewEnvClient()
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug("Created new moby client")
+	mobyClient = &MobyClient{
+		client: cli,
+		log:    log,
+	}
+	return mobyClient, nil
+}
+
+// CleanImages removes all untagged docker images
+func (mc *MobyClient) CleanImages() error {
+	mc.log.Info("Cleaning images.")
+	f := filters.NewArgs()
+	report, err := mc.client.ImagesPrune(context.Background(), f)
+	if err != nil {
+		return err
+	}
+
+	mc.log.ConsoleInfo("Cleaned (%d) images reclaming %s", len(report.ImagesDeleted), format.ReadableByteSize(report.SpaceReclaimed))
 	return nil
 }
 
-func (mc MobyClient) cleanTags() (int, error) {
-	images := mc.listImages()
-	removeCount := 0
-
-	for _, i := range images {
-		remove := false
-		for _, tag := range i.RepoTags {
-			tagNames := strings.Split(tag, ":")
-			for _, tagName := range tagNames {
-				if tagName == "<none>" {
-					remove = true
-				}
-			}
-		}
-		if remove == true {
-			mc.removeImage(i.ID)
-			removeCount += 1
-		}
+// GetIP returns the IP address of a given container
+func (mc *MobyClient) GetIP(name string) (string, error) {
+	containers, err := mc.listContainersByName(name)
+	if err != nil {
+		return "", err
 	}
-	return removeCount, nil
-}
-
-func (mc MobyClient) GetIP(name string) (string, error) {
-	containers := mc.listContainersByName(name)
+	mc.log.Trace("Found (%d) containers by name %s", len(containers), name)
 	for _, c := range containers {
 		cName := c.Names[0]
 		if len(cName) > 0 {
@@ -88,16 +77,20 @@ func (mc MobyClient) GetIP(name string) (string, error) {
 		if !ok {
 			continue
 		}
+		mc.log.ConsoleInfo(bridge.IPAddress)
 		return bridge.IPAddress, nil
 	}
 	return "", nil
 }
 
-func (mc MobyClient) GetName(name string) (string, error) {
-	containers := mc.listContainersByName(name)
+// GetName returns a sequentially numbered available container name.
+// For example, if web-001 exists, GetName "web" would return web-002
+func (mc *MobyClient) GetName(name string) (str string, err error) {
+	containers, err := mc.listContainersByName(name)
+	if err != nil {
+		return "", err
+	}
 	num := 0
-	var err error = nil
-
 	for _, c := range containers {
 		cName := c.Names[0]
 		if len(cName) > 0 {
@@ -111,29 +104,45 @@ func (mc MobyClient) GetName(name string) (string, error) {
 			continue
 		}
 		strNum := parts[1]
-		dnum, err := strconv.Atoi(strNum)
-		if err != nil {
+		dnum, strerr := strconv.Atoi(strNum)
+		if strerr != nil {
 			continue
 		}
 		if dnum > num {
 			num = dnum
 		}
 	}
-	num += 1
+	num++
 	sNum, _ := padNum(num)
-	return fmt.Sprintf("%s-%s", name, sNum), err
+	newName := fmt.Sprintf("%s-%s", name, sNum)
+	mc.log.ConsoleInfo(newName)
+	return newName, err
 }
 
-func (mc MobyClient) listImages() []types.Image {
-	options := types.ImageListOptions{All: true}
-	images, err := mc.client.ImageList(context.Background(), options)
-	if err != nil {
-		panic(err)
+func (mc *MobyClient) formatContainers(containers []types.Container) string {
+	msg := "[\n"
+	for _, c := range containers {
+		if c.Names == nil || len(c.Names) < 1 {
+			continue
+		}
+		name := c.Names[0]
+		msg = fmt.Sprintf("%s%s,\n", msg, name)
 	}
-	return images
+	msg = fmt.Sprintf("%s]", msg)
+	return msg
 }
 
-func (mc MobyClient) listContainers() []types.Container {
+func (mc *MobyClient) listImages() []types.ImageInspect {
+	// options := types.ImageListOptions{All: true}
+	// images, err := mc.client.ImageList(context.Background(), options)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// return images
+	return nil
+}
+
+func (mc *MobyClient) listContainers() []types.Container {
 	options := types.ContainerListOptions{All: true}
 	containers, err := mc.client.ContainerList(context.Background(), options)
 	if err != nil {
@@ -142,18 +151,21 @@ func (mc MobyClient) listContainers() []types.Container {
 	return containers
 }
 
-func (mc MobyClient) listContainersByName(name string) []types.Container {
+func (mc *MobyClient) listContainersByName(name string) ([]types.Container, error) {
 	filterArg := filters.NewArgs()
 	filterArg.Add("name", name)
-	options := types.ContainerListOptions{All: true, Filter: filterArg}
+	options := types.ContainerListOptions{All: true, Filters: filterArg}
 	containers, err := mc.client.ContainerList(context.Background(), options)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return containers
+	return containers, nil
 }
 
-func (mc MobyClient) RemoveStoppedContainers() error {
+// RemoveStoppedContainers removes all containers with the stopped or exited
+// status
+func (mc *MobyClient) RemoveStoppedContainers() error {
+	mc.log.Info("Removing stopped containers.")
 	containers := mc.listContainers()
 	stoppedContainers := []types.Container{}
 	for _, c := range containers {
@@ -164,50 +176,60 @@ func (mc MobyClient) RemoveStoppedContainers() error {
 	return mc.removeContainers(stoppedContainers)
 }
 
-func (mc MobyClient) RemoveAllContainers() error {
+// RemoveAllContainers removes all existing containers. Use with caution!
+func (mc *MobyClient) RemoveAllContainers() error {
+	mc.log.Info("Removing all containers.")
 	containers := mc.listContainers()
 	return mc.removeContainers(containers)
 }
 
-func (mc MobyClient) removeContainer(containerID string) error {
+func (mc *MobyClient) removeContainer(container *types.Container) error {
+	name := container.Names[0]
+	mc.log.Trace("Removing container: %s - ", name, container.ID[:12])
 	options := types.ContainerRemoveOptions{Force: true}
-	err := mc.client.ContainerRemove(context.Background(), containerID, options)
+	err := mc.client.ContainerRemove(context.Background(), container.ID, options)
 	return err
+
 }
 
-func (mc MobyClient) removeContainers(containers []types.Container) error {
+func (mc *MobyClient) removeContainers(containers []types.Container) error {
+	containerString := mc.formatContainers(containers)
+	mc.log.Trace("Removing containers %s", containerString)
 	removedContainers := []string{}
 	for _, c := range containers {
-		mc.removeContainer(c.ID)
+		mc.removeContainer(&c)
 		shortID := c.ID[:12]
 		removedContainers = append(removedContainers, shortID)
+		mc.log.ConsoleInfo(shortID)
 	}
 	if len(removedContainers) != 0 {
-		mc.logger.LogLines(removedContainers)
-		msg := fmt.Sprintf("Removed (%d) containers.", len(removedContainers))
-		mc.logger.Log(msg)
+		mc.log.ConsoleInfo("Removed (%d) containers.", len(removedContainers))
 	}
 	return nil
 }
 
-func (mc MobyClient) removeImage(imageID string) error {
+func (mc *MobyClient) removeImage(imageID string) error {
 	options := types.ImageRemoveOptions{Force: true}
 	_, err := mc.client.ImageRemove(context.Background(), imageID, options)
 	return err
 }
 
-func (mc MobyClient) StopContainers() error {
+// StopContainers stops all running containers.
+func (mc *MobyClient) StopContainers() error {
+	mc.log.Info("Stopping all running containers.")
 	containers := mc.listContainers()
+	containerStr := mc.formatContainers(containers)
+	mc.log.Trace("Found containers %s", containerStr)
+
 	stopCount := 0
 	for _, c := range containers {
 		if c.State == "running" {
 			duration, _ := time.ParseDuration("30s")
 			mc.client.ContainerStop(context.Background(), c.ID, &duration)
-			stopCount += 1
+			stopCount++
 		}
 	}
-	msg := fmt.Sprintf("Stopped (%d) containers.", stopCount)
-	mc.logger.Log(msg)
+	mc.log.ConsoleInfo("Stopped (%d) containers.", stopCount)
 	return nil
 }
 
