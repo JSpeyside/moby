@@ -2,23 +2,26 @@ package interfaces
 
 import (
 	"fmt"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/docker/engine-api/client"
 	"github.com/docker/engine-api/types"
 	"github.com/docker/engine-api/types/filters"
 	"github.com/jlgrady1/moby/infrastructure"
 	"golang.org/x/net/context"
-	"runtime"
-	"strconv"
-	"strings"
-	"time"
 )
 
+// MobyClient is a client and wrapper around the docker api client
 type MobyClient struct {
 	client *client.Client
 	logger *infrastructure.Logger
 	Quiet  bool
 }
 
+//NewMobyClient returns a pointer to a new MobyClient
 func NewMobyClient() (*MobyClient, error) {
 	var cli *client.Client
 	var err error
@@ -32,11 +35,12 @@ func NewMobyClient() (*MobyClient, error) {
 		// cli, err := client.NewClient("unix:///var/run/docker.sock", "v1.22", nil, defaultHeaders)
 		return nil, fmt.Errorf("Unsupported OS `%s`. Only Mac OS X is currently supported", systemOS)
 	}
-	logger := infrastructure.NewLogger()
+	logger, err := infrastructure.NewLogger(false)
 	mobyClient := &MobyClient{cli, logger, false}
 	return mobyClient, err
 }
 
+// CleanImages removes all untagged docker images
 func (mc MobyClient) CleanImages() error {
 	var err error
 	previousCount := -1
@@ -68,12 +72,13 @@ func (mc MobyClient) cleanTags() (int, error) {
 		}
 		if remove == true {
 			mc.removeImage(i.ID)
-			removeCount += 1
+			removeCount++
 		}
 	}
 	return removeCount, nil
 }
 
+// GetIP returns the IP address of a given container
 func (mc MobyClient) GetIP(name string) (string, error) {
 	containers := mc.listContainersByName(name)
 	for _, c := range containers {
@@ -93,11 +98,11 @@ func (mc MobyClient) GetIP(name string) (string, error) {
 	return "", nil
 }
 
-func (mc MobyClient) GetName(name string) (string, error) {
+// GetName returns a sequentially numbered available container name.
+// For example, if web-001 exists, GetName "web" would return web-002
+func (mc MobyClient) GetName(name string) (str string, err error) {
 	containers := mc.listContainersByName(name)
 	num := 0
-	var err error = nil
-
 	for _, c := range containers {
 		cName := c.Names[0]
 		if len(cName) > 0 {
@@ -111,15 +116,15 @@ func (mc MobyClient) GetName(name string) (string, error) {
 			continue
 		}
 		strNum := parts[1]
-		dnum, err := strconv.Atoi(strNum)
-		if err != nil {
+		dnum, strerr := strconv.Atoi(strNum)
+		if strerr != nil {
 			continue
 		}
 		if dnum > num {
 			num = dnum
 		}
 	}
-	num += 1
+	num++
 	sNum, _ := padNum(num)
 	return fmt.Sprintf("%s-%s", name, sNum), err
 }
@@ -153,6 +158,8 @@ func (mc MobyClient) listContainersByName(name string) []types.Container {
 	return containers
 }
 
+// RemoveStoppedContainers removes all containers with the stopped or exited
+// status
 func (mc MobyClient) RemoveStoppedContainers() error {
 	containers := mc.listContainers()
 	stoppedContainers := []types.Container{}
@@ -164,6 +171,7 @@ func (mc MobyClient) RemoveStoppedContainers() error {
 	return mc.removeContainers(stoppedContainers)
 }
 
+// RemoveAllContainers removes all existing containers. Use with caution!
 func (mc MobyClient) RemoveAllContainers() error {
 	containers := mc.listContainers()
 	return mc.removeContainers(containers)
@@ -196,6 +204,7 @@ func (mc MobyClient) removeImage(imageID string) error {
 	return err
 }
 
+// StopContainers stops all running containers.
 func (mc MobyClient) StopContainers() error {
 	containers := mc.listContainers()
 	stopCount := 0
@@ -203,7 +212,7 @@ func (mc MobyClient) StopContainers() error {
 		if c.State == "running" {
 			duration, _ := time.ParseDuration("30s")
 			mc.client.ContainerStop(context.Background(), c.ID, &duration)
-			stopCount += 1
+			stopCount++
 		}
 	}
 	msg := fmt.Sprintf("Stopped (%d) containers.", stopCount)
