@@ -39,15 +39,13 @@ var (
 )
 
 func main() {
-	// log := infrastructure.NewLogger()
 	config := infrastructure.LoadConfig()
-	mobyClient, _ := interfaces.NewMobyClient()
+	mobyClient, _ := interfaces.NewMobyClient(*quiet)
 
 	kingpin.Version(config.Version)
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case "quiet":
 		fmt.Println("shhh")
-		mobyClient.Quiet = true
 	case removeStopped.FullCommand():
 		mobyClient.RemoveStoppedContainers()
 	case removeAll.FullCommand():
@@ -60,8 +58,7 @@ func main() {
 		name, _ := mobyClient.GetName(*prefix)
 		fmt.Println(name)
 	case ip.FullCommand():
-		ipAddress, _ := mobyClient.GetIP(*ipContainer)
-		fmt.Println(ipAddress)
+		mobyClient.GetIP(*ipContainer)
 	case test.FullCommand():
 
 		// fmt.Println("test")
