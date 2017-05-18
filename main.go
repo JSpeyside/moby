@@ -1,11 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"os"
+
 	"github.com/jlgrady1/moby/infrastructure"
 	"github.com/jlgrady1/moby/interfaces"
 	"gopkg.in/alecthomas/kingpin.v2"
-	"os"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
+	"github.com/jlgrady1/go-log"
 )
 
 var (
@@ -28,6 +34,8 @@ var (
 
 	ip          = app.Command("ip", "Get the IP for a given container.")
 	ipContainer = ip.Arg("name", "The name of the container to fetch the IP from.").Required().String()
+
+	test = app.Command("test", "testing")
 )
 
 func main() {
@@ -38,6 +46,7 @@ func main() {
 	kingpin.Version(config.Version)
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case "quiet":
+		fmt.Println("shhh")
 		mobyClient.Quiet = true
 	case removeStopped.FullCommand():
 		mobyClient.RemoveStoppedContainers()
@@ -53,5 +62,26 @@ func main() {
 	case ip.FullCommand():
 		ipAddress, _ := mobyClient.GetIP(*ipContainer)
 		fmt.Println(ipAddress)
+	case test.FullCommand():
+
+		// fmt.Println("test")
+		log, err := logger.NewLogger("/tmp/moby.log", logger.INFO)
+		if err != nil {
+			panic(err)
+		}
+		log.Console("test123")
+		cli, err := client.NewEnvClient()
+		if err != nil {
+			panic(err)
+		}
+		containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
+		if err != nil {
+			panic(err)
+		}
+
+		for _, container := range containers {
+			fmt.Printf("%s %s\n", container.ID[:10], container.Image)
+		}
+
 	}
 }
