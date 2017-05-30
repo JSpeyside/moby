@@ -32,13 +32,20 @@ var (
 	ip          = app.Command("ip", "Get the IP for a given container.")
 	ipContainer = ip.Arg("name", "The name of the container to fetch the IP from.").Required().String()
 
+	// Compose Commands
+	up = app.Command("up", "Start the docker-compose app.")
+	//down
+	//logs
+	//rebuild
+	//setcompose
+
 	// test = app.Command("test", "testing")
 )
 
 func main() {
 	config := infrastructure.LoadConfig()
 
-	kingpin.Version(config.Version)
+	kingpin.Version(config.Version.String())
 	command := kingpin.MustParse(app.Parse(os.Args[1:]))
 	mobyClient, _ := interfaces.NewMobyClient(*quiet, *logfile)
 	var err error
@@ -56,6 +63,8 @@ func main() {
 		_, err = mobyClient.GetName(*prefix)
 	case ip.FullCommand():
 		_, err = mobyClient.GetIP(*ipContainer)
+	case up.FullCommand():
+		err = mobyClient.Up()
 	}
 
 	if err != nil {
