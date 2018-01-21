@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jlgrady1/moby/infrastructure"
-	"github.com/jlgrady1/moby/interfaces"
+	"github.com/jspeyside/moby/infrastructure"
+	"github.com/jspeyside/moby/interfaces"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 

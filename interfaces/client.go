@@ -9,8 +9,8 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
-	"github.com/jlgrady1/go-log"
-	"github.com/jlgrady1/go-utils/format"
+	"github.com/jspeyside/go-log"
+	"github.com/jspeyside/go-utils/format"
 	"golang.org/x/net/context"
 )
 
